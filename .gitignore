@@ -65,6 +65,3 @@ docker-compose.override.yml
 *.tfstate
 *.tfstate.*
 .terraform/
-
-# Poetry
-poetry.lock
