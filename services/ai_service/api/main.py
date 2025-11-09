@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from shared.config.settings import get_settings
-from ai_service.api.routes import ai_routes
+from ai_service.api.routes import ai_routes, onboarding_routes
 
 settings = get_settings()
 
@@ -15,7 +15,7 @@ settings = get_settings()
 app = FastAPI(
     title="Review Platform AI Service",
     version="1.0.0",
-    description="AI-powered features: style generation, review summarization, sentiment analysis",
+    description="AI-powered features: style generation, review summarization, sentiment analysis, automated onboarding",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
@@ -32,6 +32,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(ai_routes.router)
+app.include_router(onboarding_routes.router)
 
 
 @app.get("/", tags=["health"])
@@ -42,6 +43,7 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "features": [
+            "AI-powered automated onboarding (NEW!)",
             "AI style generation",
             "Review summarization",
             "Sentiment analysis",
