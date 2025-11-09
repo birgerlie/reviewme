@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: reviewplatform
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: reviews
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reviewplatform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # RabbitMQ (Event Bus)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: reviewplatform
+      RABBITMQ_DEFAULT_PASS: devpassword
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Review Service
+  review-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.review
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://reviewplatform:devpassword@postgres:5432/reviews
+      - REDIS_URL=redis://redis:6379
+      - RABBITMQ_URL=amqp://reviewplatform:devpassword@rabbitmq:5672/
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    command: uvicorn services.review_service.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # AI Service
+  ai-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.ai
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "8001:8001"
+    depends_on:
+      - redis
+    command: uvicorn services.ai_service.api.main:app --host 0.0.0.0 --port 8001 --reload
+
+  # Widget Service
+  widget-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.widget
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - REVIEW_SERVICE_URL=http://review-service:8000
+    ports:
+      - "8002:8002"
+    depends_on:
+      - redis
+      - review-service
+    command: uvicorn services.widget_service.api.main:app --host 0.0.0.0 --port 8002 --reload
+
+  # Email Service
+  email-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.email
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://reviewplatform:devpassword@postgres:5432/reviews
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+    ports:
+      - "8003:8003"
+    depends_on:
+      - postgres
+    command: uvicorn services.email_service.api.main:app --host 0.0.0.0 --port 8003 --reload
+
+  # Media Service
+  media-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://reviewplatform:devpassword@postgres:5432/reviews
+      - S3_BUCKET=${S3_BUCKET}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - CDN_URL=${CDN_URL:-https://cdn.reviewplatform.com}
+    ports:
+      - "8004:8004"
+    depends_on:
+      - postgres
+    command: uvicorn services.media_service.api.main:app --host 0.0.0.0 --port 8004 --reload
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  default:
+    name: reviewplatform
