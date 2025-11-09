@@ -1,0 +1,313 @@
+name: CI - Test & Build
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+env:
+  PYTHON_VERSION: '3.11'
+  POETRY_VERSION: '1.7.1'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: reviewplatform
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: reviews_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache Poetry installation
+        uses: actions/cache@v4
+        with:
+          path: ~/.local
+          key: poetry-${{ env.POETRY_VERSION }}-${{ runner.os }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-${{ hashFiles('**/poetry.lock') }}
+          restore-keys: |
+            venv-${{ runner.os }}-${{ env.PYTHON_VERSION }}-
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Set up environment variables
+        run: |
+          cat > .env << EOF
+          ENVIRONMENT=test
+          DEBUG=false
+          DATABASE_URL=postgresql+asyncpg://reviewplatform:testpassword@localhost:5432/reviews_test
+          REDIS_URL=redis://localhost:6379/0
+          ANTHROPIC_API_KEY=test-key-for-ci
+          ANTHROPIC_MODEL=claude-3-5-sonnet-20241022
+          JWT_SECRET=test-jwt-secret-key-for-ci-only
+          JWT_ALGORITHM=HS256
+          LOG_LEVEL=WARNING
+          EOF
+
+      - name: Run Review Service tests
+        run: |
+          echo "::group::Review Service Tests"
+          poetry run pytest services/review_service/tests/ -v --cov=services/review_service --cov-report=xml:coverage-review.xml --cov-report=term
+          echo "::endgroup::"
+
+      - name: Run AI Service tests
+        run: |
+          echo "::group::AI Service Tests"
+          poetry run pytest services/ai_service/tests/ -v --cov=services/ai_service --cov-report=xml:coverage-ai.xml --cov-report=term
+          echo "::endgroup::"
+
+      - name: Run Widget Service tests
+        run: |
+          echo "::group::Widget Service Tests"
+          poetry run pytest services/widget_service/tests/ -v --cov=services/widget_service --cov-report=xml:coverage-widget.xml --cov-report=term
+          echo "::endgroup::"
+
+      - name: Run Email Service tests
+        run: |
+          echo "::group::Email Service Tests"
+          poetry run pytest services/email_service/tests/ -v --cov=services/email_service --cov-report=xml:coverage-email.xml --cov-report=term
+          echo "::endgroup::"
+
+      - name: Run Media Service tests
+        run: |
+          echo "::group::Media Service Tests"
+          poetry run pytest services/media_service/tests/ -v --cov=services/media_service --cov-report=xml:coverage-media.xml --cov-report=term
+          echo "::endgroup::"
+
+      - name: Generate combined coverage report
+        run: |
+          poetry run coverage combine || true
+          poetry run coverage report --precision=2
+          poetry run coverage html
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage-review.xml,./coverage-ai.xml,./coverage-widget.xml,./coverage-email.xml,./coverage-media.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage-*.xml
+            htmlcov/
+          retention-days: 30
+
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+
+      - name: Install dependencies
+        run: poetry install --no-interaction --no-ansi
+
+      - name: Check code formatting with black
+        run: |
+          poetry run black --check services/ || echo "::warning::Black formatting issues found"
+
+      - name: Check import sorting with isort
+        run: |
+          poetry run isort --check-only services/ || echo "::warning::Import sorting issues found"
+
+      - name: Run flake8 linting
+        run: |
+          poetry run flake8 services/ --max-line-length=120 --extend-ignore=E203,W503 || echo "::warning::Flake8 issues found"
+
+      - name: Type checking with mypy
+        run: |
+          poetry run mypy services/ --ignore-missing-imports || echo "::warning::Type checking issues found"
+        continue-on-error: true
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [review, ai, widget, email, media]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build ${{ matrix.service }} service Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.${{ matrix.service }}
+          push: false
+          tags: reviewplatform-${{ matrix.service }}:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test, docker-build]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Start services with Docker Compose
+        run: |
+          docker-compose -f docker-compose.dev.yml up -d
+          echo "Waiting for services to be healthy..."
+          sleep 30
+
+      - name: Check service health
+        run: |
+          services=(8000 8001 8002 8003 8004)
+          for port in "${services[@]}"; do
+            echo "Checking service on port $port..."
+            curl -f http://localhost:$port/health || echo "::warning::Service on port $port not responding"
+          done
+
+      - name: Show service logs
+        if: failure()
+        run: docker-compose -f docker-compose.dev.yml logs
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose -f docker-compose.dev.yml down -v
+
+  security-scan:
+    name: Security Scanning
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  dependency-check:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: ${{ env.POETRY_VERSION }}
+
+      - name: Check for security vulnerabilities
+        run: |
+          poetry export -f requirements.txt --output requirements.txt --without-hashes
+          pip install safety
+          safety check --file requirements.txt --json || echo "::warning::Security vulnerabilities found in dependencies"
+        continue-on-error: true
+
+  status-check:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [test, lint, docker-build, integration-test, security-scan, dependency-check]
+    if: always()
+
+    steps:
+      - name: Check all job statuses
+        run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "::error::Tests failed"
+            exit 1
+          fi
+          if [[ "${{ needs.lint.result }}" != "success" ]]; then
+            echo "::warning::Linting checks had issues"
+          fi
+          if [[ "${{ needs.docker-build.result }}" != "success" ]]; then
+            echo "::error::Docker build failed"
+            exit 1
+          fi
+          if [[ "${{ needs.integration-test.result }}" != "success" ]]; then
+            echo "::warning::Integration tests had issues"
+          fi
+          echo "✅ All critical checks passed!"

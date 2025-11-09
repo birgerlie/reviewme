@@ -1,0 +1,63 @@
+# Code Owners for Review Platform
+#
+# These owners will be automatically requested for review when someone
+# opens a pull request that modifies files in the specified paths.
+#
+# Learn more: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global fallback owner(s) - will be requested for review on everything
+# unless a later match takes precedence
+*       @birgerlie
+
+# === Services ===
+
+# Review Service - Core review management
+/services/review_service/                    @birgerlie
+
+# AI Service - AI features, onboarding agent, summaries
+/services/ai_service/                        @birgerlie
+
+# Widget Service - Public-facing widget API
+/services/widget_service/                    @birgerlie
+
+# Email Service - Email campaigns and templates
+/services/email_service/                     @birgerlie
+
+# Media Service - Image/video uploads and CDN
+/services/media_service/                     @birgerlie
+
+# === Infrastructure ===
+
+# Docker and orchestration
+/docker-compose*.yml                         @birgerlie
+/Dockerfile.*                                @birgerlie
+
+# CI/CD workflows
+/.github/workflows/                          @birgerlie
+
+# Deployment and environment
+/DEPLOYMENT.md                               @birgerlie
+/.env.example                                @birgerlie
+
+# === Documentation ===
+
+# Main documentation
+/README.md                                   @birgerlie
+/DEVELOPMENT.md                              @birgerlie
+/PROGRESS.md                                 @birgerlie
+/.github/BRANCH_PROTECTION.md                @birgerlie
+
+# === Configuration ===
+
+# Python dependencies
+/pyproject.toml                              @birgerlie
+/poetry.lock                                 @birgerlie
+
+# Database migrations
+/alembic/                                    @birgerlie
+/alembic.ini                                 @birgerlie
+
+# === Tests ===
+
+# Test files require review to maintain quality
+**/tests/                                    @birgerlie
