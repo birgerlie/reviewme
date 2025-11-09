@@ -1,9 +1,11 @@
 """
 Onboarding AI Agent Service
 Automated merchant onboarding with AI-powered design extraction and widget generation
+
+REFACTORED: Now uses Claude Tool Calling API for reliable, structured responses!
 """
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from enum import Enum
 import json
 import re
@@ -50,9 +52,9 @@ class OnboardingResult:
 
 class OnboardingAgentService:
     """
-    Onboarding AI Agent Service
+    Onboarding AI Agent Service (TOOL CALLING VERSION)
 
-    Automates merchant onboarding by:
+    Automates merchant onboarding using Claude's structured tool calling:
     1. Analyzing their storefront (domain)
     2. Detecting platform (Shopify, WooCommerce, etc.)
     3. Extracting design system (colors, fonts, spacing)
@@ -60,7 +62,135 @@ class OnboardingAgentService:
     5. Creating implementation code
 
     This is a KEY competitive advantage - merchants can launch in minutes!
+    
+    IMPROVEMENT: Uses Claude Tool Calling for reliable, type-safe responses!
     """
+
+    # Define tools for structured responses
+    PLATFORM_DETECTION_TOOL = {
+        "name": "detect_ecommerce_platform",
+        "description": "Detect the e-commerce platform used by a website based on HTML analysis",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "platform": {
+                    "type": "string",
+                    "enum": ["shopify", "woocommerce", "bigcommerce", "magento", "custom", "unknown"],
+                    "description": "The detected e-commerce platform"
+                },
+                "confidence": {
+                    "type": "number",
+                    "description": "Confidence score from 0.0 to 1.0"
+                },
+                "indicators": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of indicators that led to this detection"
+                }
+            },
+            "required": ["platform", "confidence", "indicators"]
+        }
+    }
+
+    DESIGN_EXTRACTION_TOOL = {
+        "name": "extract_design_system",
+        "description": "Extract design system (colors, fonts, spacing) from website HTML/CSS",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "primary_color": {
+                    "type": "string",
+                    "description": "Primary brand color in hex format (e.g., #2C3E50)"
+                },
+                "secondary_color": {
+                    "type": "string",
+                    "description": "Secondary brand color in hex format"
+                },
+                "accent_color": {
+                    "type": "string",
+                    "description": "Accent color in hex format"
+                },
+                "background_color": {
+                    "type": "string",
+                    "description": "Background color in hex format"
+                },
+                "text_color": {
+                    "type": "string",
+                    "description": "Text color in hex format"
+                },
+                "font_family": {
+                    "type": "string",
+                    "description": "Primary font family with fallbacks (e.g., 'Roboto, Arial, sans-serif')"
+                },
+                "heading_font": {
+                    "type": "string",
+                    "description": "Heading font family (if different from primary)"
+                },
+                "border_radius": {
+                    "type": "string",
+                    "description": "Border radius value (e.g., '4px', '8px')"
+                },
+                "spacing_unit": {
+                    "type": "string",
+                    "description": "Base spacing unit (e.g., '8px', '16px')"
+                },
+                "button_style": {
+                    "type": "string",
+                    "enum": ["rounded", "square", "pill"],
+                    "description": "Button style pattern"
+                },
+                "theme_style": {
+                    "type": "string",
+                    "enum": ["modern-minimal", "classic", "bold", "elegant"],
+                    "description": "Overall aesthetic theme"
+                }
+            },
+            "required": ["primary_color", "font_family", "border_radius", "theme_style"]
+        }
+    }
+
+    WIDGET_CONFIG_TOOL = {
+        "name": "generate_widget_config",
+        "description": "Generate themed widget configuration matching the brand design",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "layout": {
+                    "type": "string",
+                    "enum": ["grid", "list", "carousel", "masonry"],
+                    "description": "Widget layout style"
+                },
+                "theme": {
+                    "type": "string",
+                    "enum": ["light", "dark", "auto"],
+                    "description": "Color theme"
+                },
+                "custom_styles": {
+                    "type": "object",
+                    "properties": {
+                        "primaryColor": {"type": "string"},
+                        "secondaryColor": {"type": "string"},
+                        "fontFamily": {"type": "string"},
+                        "borderRadius": {"type": "string"},
+                        "spacing": {"type": "string"}
+                    },
+                    "description": "Custom CSS styles"
+                },
+                "display_settings": {
+                    "type": "object",
+                    "properties": {
+                        "show_photos": {"type": "boolean"},
+                        "show_verified_badge": {"type": "boolean"},
+                        "show_response": {"type": "boolean"},
+                        "reviews_per_page": {"type": "integer"},
+                        "star_color": {"type": "string"}
+                    },
+                    "description": "Display configuration"
+                }
+            },
+            "required": ["layout", "theme", "custom_styles"]
+        }
+    }
 
     def __init__(
         self,
@@ -110,13 +240,13 @@ class OnboardingAgentService:
         # Fetch website HTML
         html_content = await self._fetch_website(domain)
 
-        # Detect platform
+        # Detect platform using Tool Calling
         platform = await self.detect_platform(domain)
 
-        # Extract design system using AI
+        # Extract design system using Tool Calling
         design_system = await self.extract_design_system(domain, html_content)
 
-        # Generate widget configuration
+        # Generate widget configuration using Tool Calling
         widget_config = await self.generate_widget_config(design_system, merchant_id)
 
         # Generate implementation code
@@ -146,9 +276,9 @@ class OnboardingAgentService:
 
     async def detect_platform(self, domain: str) -> PlatformType:
         """
-        Detect e-commerce platform
+        Detect e-commerce platform using Tool Calling
 
-        Uses pattern matching and AI analysis to identify the platform.
+        Uses structured tool calling for reliable platform detection.
 
         Args:
             domain: Merchant domain
@@ -158,7 +288,7 @@ class OnboardingAgentService:
         """
         html_content = await self._fetch_website(domain)
 
-        # Quick pattern matching for common platforms
+        # Quick pattern matching for common platforms (fast path)
         if "shopify" in html_content.lower() or "myshopify.com" in html_content.lower():
             return PlatformType.SHOPIFY
         
@@ -171,30 +301,38 @@ class OnboardingAgentService:
         if "magento" in html_content.lower():
             return PlatformType.MAGENTO
 
-        # Use AI for deeper analysis
-        prompt = f"""Analyze this website HTML and determine the e-commerce platform.
+        # Use AI with Tool Calling for deeper analysis
+        prompt = f"""Analyze this website HTML and detect the e-commerce platform.
 
 HTML (first 5000 chars):
 {html_content[:5000]}
 
-Respond with ONLY a JSON object:
-{{
-    "platform": "shopify" | "woocommerce" | "bigcommerce" | "magento" | "custom" | "unknown",
-    "confidence": 0.0-1.0,
-    "indicators": ["indicator1", "indicator2"]
-}}"""
+Look for:
+- JavaScript variables (e.g., Shopify, woocommerce_params)
+- Meta tags (generator, powered-by)
+- Script sources (myshopify.com, woocommerce)
+- HTML comments or class names
+- URL patterns
+
+Use the detect_ecommerce_platform tool to return your analysis."""
 
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            tools=[self.PLATFORM_DETECTION_TOOL],
             messages=[{"role": "user", "content": prompt}]
         )
 
-        try:
-            result = json.loads(response.content[0].text)
-            return PlatformType(result["platform"])
-        except:
-            return PlatformType.UNKNOWN
+        # Extract tool use from response
+        for content in response.content:
+            if content.type == "tool_use" and content.name == "detect_ecommerce_platform":
+                platform_data = content.input
+                try:
+                    return PlatformType(platform_data["platform"])
+                except (KeyError, ValueError):
+                    return PlatformType.UNKNOWN
+
+        return PlatformType.UNKNOWN
 
     async def extract_design_system(
         self, 
@@ -202,13 +340,9 @@ Respond with ONLY a JSON object:
         html_content: str
     ) -> DesignSystem:
         """
-        Extract design system using AI
+        Extract design system using Tool Calling
 
-        Analyzes the website to extract:
-        - Colors (primary, secondary, accent)
-        - Typography (fonts, sizes)
-        - Spacing and borders
-        - Overall style theme
+        Uses structured tool calling for reliable design extraction.
 
         Args:
             domain: Merchant domain
@@ -224,44 +358,50 @@ Website: {domain}
 HTML (first 5000 chars):
 {html_content[:5000]}
 
-Extract the following and respond with ONLY a JSON object:
-{{
-    "primary_color": "#HEX",
-    "secondary_color": "#HEX",
-    "accent_color": "#HEX",
-    "background_color": "#HEX",
-    "text_color": "#HEX",
-    "font_family": "Font Name, fallback",
-    "heading_font": "Font Name, fallback",
-    "border_radius": "Xpx",
-    "spacing_unit": "Xpx",
-    "button_style": "rounded" | "square" | "pill",
-    "theme_style": "modern-minimal" | "classic" | "bold" | "elegant"
-}}
-
-Look for:
+Extract the design system by analyzing:
 - CSS styles in <style> tags or style attributes
-- Google Fonts or other font imports
-- Color schemes in backgrounds, buttons, links
-- Border radius patterns
-- Overall aesthetic"""
+- Google Fonts or other font imports (<link> tags)
+- Color schemes in backgrounds, buttons, links, headers
+- Border radius patterns (buttons, cards, images)
+- Spacing patterns (margins, padding)
+- Overall aesthetic (modern, classic, minimal, bold)
+
+Use the extract_design_system tool to return the design system."""
 
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            tools=[self.DESIGN_EXTRACTION_TOOL],
             messages=[{"role": "user", "content": prompt}]
         )
 
-        try:
-            data = json.loads(response.content[0].text)
-            return DesignSystem(**data)
-        except:
-            # Fallback to default design
-            return DesignSystem(
-                primary_color="#2C3E50",
-                secondary_color="#E74C3C",
-                font_family="Arial, sans-serif",
-            )
+        # Extract tool use from response
+        for content in response.content:
+            if content.type == "tool_use" and content.name == "extract_design_system":
+                design_data = content.input
+                try:
+                    return DesignSystem(
+                        primary_color=design_data.get("primary_color", "#2C3E50"),
+                        secondary_color=design_data.get("secondary_color"),
+                        accent_color=design_data.get("accent_color"),
+                        background_color=design_data.get("background_color", "#FFFFFF"),
+                        text_color=design_data.get("text_color", "#333333"),
+                        font_family=design_data.get("font_family", "Arial, sans-serif"),
+                        heading_font=design_data.get("heading_font"),
+                        border_radius=design_data.get("border_radius", "4px"),
+                        spacing_unit=design_data.get("spacing_unit", "8px"),
+                        button_style=design_data.get("button_style", "rounded"),
+                        theme_style=design_data.get("theme_style", "modern"),
+                    )
+                except Exception:
+                    pass
+
+        # Fallback to default design
+        return DesignSystem(
+            primary_color="#2C3E50",
+            secondary_color="#E74C3C",
+            font_family="Arial, sans-serif",
+        )
 
     async def generate_widget_config(
         self,
@@ -269,9 +409,9 @@ Look for:
         merchant_id: str,
     ) -> Dict[str, Any]:
         """
-        Generate themed widget configuration
+        Generate themed widget configuration using Tool Calling
 
-        Creates a widget config that matches the merchant's brand.
+        Uses structured tool calling for reliable config generation.
 
         Args:
             design_system: Extracted design system
@@ -280,63 +420,55 @@ Look for:
         Returns:
             Widget configuration dict
         """
-        prompt = f"""Generate a review widget configuration that matches this design system:
+        prompt = f"""Generate a review widget configuration that perfectly matches this design system:
 
 Design System:
 - Primary Color: {design_system.primary_color}
-- Font: {design_system.font_family}
+- Secondary Color: {design_system.secondary_color}
+- Font Family: {design_system.font_family}
 - Border Radius: {design_system.border_radius}
 - Theme Style: {design_system.theme_style}
+- Button Style: {design_system.button_style}
+- Spacing: {design_system.spacing_unit}
 
-Create a configuration with ONLY this JSON format:
-{{
-    "layout": "grid" | "list" | "carousel" | "masonry",
-    "theme": "light" | "dark" | "auto",
-    "custom_styles": {{
-        "primaryColor": "#HEX",
-        "secondaryColor": "#HEX",
-        "fontFamily": "Font, fallback",
-        "borderRadius": "Xpx",
-        "spacing": "Xpx"
-    }},
-    "display_settings": {{
-        "show_photos": true,
-        "show_verified_badge": true,
-        "show_response": true,
-        "reviews_per_page": 12,
-        "star_color": "#HEX"
-    }}
-}}
+Create a widget configuration that:
+1. Matches the brand's visual identity
+2. Uses appropriate layout for the theme style
+3. Includes all custom styles from the design system
+4. Configures display settings for best user experience
 
-Make it match the brand perfectly!"""
+Use the generate_widget_config tool to return the configuration."""
 
         response = await self.client.messages.create(
             model=self.model,
             max_tokens=self.max_tokens,
+            tools=[self.WIDGET_CONFIG_TOOL],
             messages=[{"role": "user", "content": prompt}]
         )
 
-        try:
-            config = json.loads(response.content[0].text)
-            config["merchant_id"] = merchant_id
-            return config
-        except:
-            # Fallback config
-            return {
-                "layout": "grid",
-                "theme": "light",
-                "merchant_id": merchant_id,
-                "custom_styles": {
-                    "primaryColor": design_system.primary_color,
-                    "fontFamily": design_system.font_family,
-                    "borderRadius": design_system.border_radius,
-                },
-                "display_settings": {
-                    "show_photos": True,
-                    "show_verified_badge": True,
-                    "reviews_per_page": 12,
-                }
+        # Extract tool use from response
+        for content in response.content:
+            if content.type == "tool_use" and content.name == "generate_widget_config":
+                config = content.input
+                config["merchant_id"] = merchant_id
+                return config
+
+        # Fallback config
+        return {
+            "layout": "grid",
+            "theme": "light",
+            "merchant_id": merchant_id,
+            "custom_styles": {
+                "primaryColor": design_system.primary_color,
+                "fontFamily": design_system.font_family,
+                "borderRadius": design_system.border_radius,
+            },
+            "display_settings": {
+                "show_photos": True,
+                "show_verified_badge": True,
+                "reviews_per_page": 12,
             }
+        }
 
     async def generate_implementation_code(
         self,
@@ -388,9 +520,10 @@ Make it match the brand perfectly!"""
 """
 
         # Generate CSS styles
-        primary_color = widget_config.get("custom_styles", {}).get("primaryColor", "#2C3E50")
-        font_family = widget_config.get("custom_styles", {}).get("fontFamily", "Arial, sans-serif")
-        border_radius = widget_config.get("custom_styles", {}).get("borderRadius", "4px")
+        custom_styles = widget_config.get("custom_styles", {})
+        primary_color = custom_styles.get("primaryColor", "#2C3E50")
+        font_family = custom_styles.get("fontFamily", "Arial, sans-serif")
+        border_radius = custom_styles.get("borderRadius", "4px")
 
         css = f"""
 /* Review Platform Custom Styles */

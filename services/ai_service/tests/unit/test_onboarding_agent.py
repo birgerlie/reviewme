@@ -20,56 +20,69 @@ from ai_service.domain.services.onboarding_agent_service import (
 
 @pytest.fixture
 def mock_anthropic_client():
-    """Mock Anthropic client"""
+    """Mock Anthropic client with tool calling responses"""
     client = Mock()
-    
-    # Mock for platform detection
+
+    # Mock for platform detection (tool_use response)
+    platform_tool_use = Mock()
+    platform_tool_use.type = "tool_use"
+    platform_tool_use.name = "detect_ecommerce_platform"
+    platform_tool_use.input = {
+        "platform": "shopify",
+        "confidence": 0.95,
+        "indicators": ["myshopify.com", "Shopify.theme"]
+    }
+
     platform_response = Mock()
-    platform_response.content = [
-        Mock(text='{"platform": "shopify", "confidence": 0.95, "indicators": ["myshopify.com", "Shopify.theme"]}')
-    ]
-    
-    # Mock for design extraction
+    platform_response.content = [platform_tool_use]
+
+    # Mock for design extraction (tool_use response)
+    design_tool_use = Mock()
+    design_tool_use.type = "tool_use"
+    design_tool_use.name = "extract_design_system"
+    design_tool_use.input = {
+        "primary_color": "#2C3E50",
+        "secondary_color": "#E74C3C",
+        "accent_color": "#3498DB",
+        "background_color": "#FFFFFF",
+        "text_color": "#333333",
+        "font_family": "Helvetica Neue, Arial, sans-serif",
+        "heading_font": "Georgia, serif",
+        "border_radius": "4px",
+        "spacing_unit": "8px",
+        "button_style": "rounded",
+        "theme_style": "modern-minimal"
+    }
+
     design_response = Mock()
-    design_response.content = [
-        Mock(text='''{
-            "primary_color": "#2C3E50",
-            "secondary_color": "#E74C3C",
-            "accent_color": "#3498DB",
-            "background_color": "#FFFFFF",
-            "text_color": "#333333",
-            "font_family": "Helvetica Neue, Arial, sans-serif",
-            "heading_font": "Georgia, serif",
-            "border_radius": "4px",
-            "spacing_unit": "8px",
-            "button_style": "rounded",
-            "theme_style": "modern-minimal"
-        }''')
-    ]
-    
-    # Mock for widget generation
+    design_response.content = [design_tool_use]
+
+    # Mock for widget generation (tool_use response)
+    widget_tool_use = Mock()
+    widget_tool_use.type = "tool_use"
+    widget_tool_use.name = "generate_widget_config"
+    widget_tool_use.input = {
+        "layout": "grid",
+        "theme": "light",
+        "custom_styles": {
+            "primaryColor": "#2C3E50",
+            "fontFamily": "Helvetica Neue, Arial, sans-serif",
+            "borderRadius": "4px"
+        },
+        "display_settings": {
+            "show_photos": True,
+            "show_verified_badge": True,
+            "reviews_per_page": 12
+        }
+    }
+
     widget_response = Mock()
-    widget_response.content = [
-        Mock(text='''{
-            "layout": "grid",
-            "theme": "light",
-            "custom_styles": {
-                "primaryColor": "#2C3E50",
-                "fontFamily": "Helvetica Neue, Arial, sans-serif",
-                "borderRadius": "4px"
-            },
-            "display_settings": {
-                "show_photos": true,
-                "show_verified_badge": true,
-                "reviews_per_page": 12
-            }
-        }''')
-    ]
-    
+    widget_response.content = [widget_tool_use]
+
     client.messages.create = AsyncMock(
         side_effect=[platform_response, design_response, widget_response]
     )
-    
+
     return client
 
 
