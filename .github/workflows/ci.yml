@@ -53,18 +53,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Cache Poetry installation
-        uses: actions/cache@v4
-        with:
-          path: ~/.local
-          key: poetry-${{ env.POETRY_VERSION }}-${{ runner.os }}
-
       - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
-          virtualenvs-create: true
-          virtualenvs-in-project: true
+        run: |
+          pipx install poetry==${{ env.POETRY_VERSION }}
+          poetry config virtualenvs.create true
+          poetry config virtualenvs.in-project true
 
       - name: Cache dependencies
         uses: actions/cache@v4
@@ -160,9 +153,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
+        run: pipx install poetry==${{ env.POETRY_VERSION }}
 
       - name: Install dependencies
         run: poetry install --no-interaction --no-ansi
@@ -219,7 +210,7 @@ jobs:
 
       - name: Start services with Docker Compose
         run: |
-          docker-compose -f docker-compose.dev.yml up -d
+          docker compose -f docker-compose.dev.yml up -d
           echo "Waiting for services to be healthy..."
           sleep 30
 
@@ -233,11 +224,11 @@ jobs:
 
       - name: Show service logs
         if: failure()
-        run: docker-compose -f docker-compose.dev.yml logs
+        run: docker compose -f docker-compose.dev.yml logs
 
       - name: Cleanup
         if: always()
-        run: docker-compose -f docker-compose.dev.yml down -v
+        run: docker compose -f docker-compose.dev.yml down -v
 
   security-scan:
     name: Security Scanning
@@ -276,9 +267,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          version: ${{ env.POETRY_VERSION }}
+        run: pipx install poetry==${{ env.POETRY_VERSION }}
 
       - name: Check for security vulnerabilities
         run: |
