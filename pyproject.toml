@@ -4,7 +4,14 @@ version = "0.1.0"
 description = "High-performance, AI-powered review platform"
 authors = ["Review Platform Team"]
 readme = "README.md"
-packages = [{include = "services"}, {include = "shared"}]
+packages = [
+    {include = "review_service", from = "services"},
+    {include = "ai_service", from = "services"},
+    {include = "widget_service", from = "services"},
+    {include = "email_service", from = "services"},
+    {include = "media_service", from = "services"},
+    {include = "shared"}
+]
 
 [tool.poetry.dependencies]
 python = "^3.11"
@@ -21,6 +28,8 @@ passlib = {extras = ["bcrypt"], version = "^1.7.4"}
 python-multipart = "^0.0.6"
 anthropic = "^0.25.0"
 aioredis = "^2.0.1"
+celery = {extras = ["redis"], version = "^5.3.0"}
+flower = "^2.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.4"

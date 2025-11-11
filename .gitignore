@@ -65,3 +65,6 @@ docker-compose.override.yml
 *.tfstate
 *.tfstate.*
 .terraform/
+
+# Claude Code working files
+.claude/prompts/
