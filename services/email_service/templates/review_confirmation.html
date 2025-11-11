@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thank You for Your Review!</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 40px auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+        .header-icon {
+            font-size: 64px;
+            margin-bottom: 15px;
+        }
+        .header h1 {
+            color: #ffffff;
+            margin: 0;
+            font-size: 28px;
+            font-weight: 600;
+        }
+        .content {
+            padding: 40px 30px;
+        }
+        .greeting {
+            font-size: 18px;
+            color: #333333;
+            margin-bottom: 20px;
+        }
+        .message {
+            font-size: 16px;
+            line-height: 1.6;
+            color: #555555;
+            margin: 20px 0;
+        }
+        .review-card {
+            background-color: #f8f9fa;
+            border-left: 4px solid #10b981;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .review-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .product-thumb {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+        .review-meta {
+            flex: 1;
+        }
+        .product-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333333;
+            margin: 0 0 5px 0;
+        }
+        .rating-stars {
+            font-size: 20px;
+            margin: 0;
+        }
+        .review-content {
+            margin-top: 15px;
+        }
+        .review-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #333333;
+            margin: 0 0 8px 0;
+        }
+        .review-text {
+            font-size: 14px;
+            color: #666666;
+            line-height: 1.5;
+            margin: 0;
+        }
+        .status-badge {
+            display: inline-block;
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin: 20px 0;
+        }
+        .info-box {
+            background-color: #e0f2fe;
+            border: 1px solid #7dd3fc;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .info-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #0369a1;
+            margin: 0 0 10px 0;
+        }
+        .info-text {
+            font-size: 14px;
+            color: #0c4a6e;
+            line-height: 1.6;
+            margin: 0;
+        }
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+            margin: 20px 0;
+        }
+        .benefits-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            color: #555555;
+            font-size: 15px;
+        }
+        .benefits-list li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #10b981;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer-text {
+            font-size: 14px;
+            color: #6c757d;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        .footer-link {
+            color: #10b981;
+            text-decoration: none;
+        }
+        .social-links {
+            margin: 20px 0;
+        }
+        .social-links a {
+            display: inline-block;
+            margin: 0 10px;
+            color: #6c757d;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        @media only screen and (max-width: 600px) {
+            .container {
+                margin: 0;
+                border-radius: 0;
+            }
+            .header {
+                padding: 30px 20px;
+            }
+            .header h1 {
+                font-size: 24px;
+            }
+            .content {
+                padding: 30px 20px;
+            }
+            .review-header {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-icon">🎉</div>
+            <h1>Thank You for Your Review!</h1>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <p class="greeting">Hi {{customer_name}},</p>
+
+            <p class="message">
+                We've received your review! Thank you for taking the time to share your experience with <strong>{{product_name}}</strong>.
+            </p>
+
+            <!-- Review Summary Card -->
+            <div class="review-card">
+                <div class="review-header">
+                    <img src="{{product_image_url}}" alt="{{product_name}}" class="product-thumb">
+                    <div class="review-meta">
+                        <h3 class="product-name">{{product_name}}</h3>
+                        <p class="rating-stars">{{rating_stars}}</p>
+                    </div>
+                </div>
+                <div class="review-content">
+                    <h4 class="review-title">{{review_title}}</h4>
+                    <p class="review-text">{{review_content}}</p>
+                </div>
+            </div>
+
+            <!-- Status Badge -->
+            <center>
+                <span class="status-badge">⏳ Under Review</span>
+            </center>
+
+            <!-- What Happens Next -->
+            <div class="info-box">
+                <h3 class="info-title">What happens next?</h3>
+                <p class="info-text">
+                    Our team will review your submission to ensure it meets our community guidelines. This usually takes 24-48 hours. We'll notify you once your review is published!
+                </p>
+            </div>
+
+            <p class="message">
+                Your feedback helps other customers make informed decisions and helps {{store_name}} improve their products and services.
+            </p>
+
+            <!-- Benefits of Reviewing -->
+            <ul class="benefits-list">
+                <li>Your verified purchase badge adds credibility</li>
+                <li>Other shoppers value your honest opinion</li>
+                <li>Merchants use your feedback to improve</li>
+            </ul>
+
+            <p class="message">
+                <strong>Review ID:</strong> {{review_id}}
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-text">
+                <strong>{{store_name}}</strong><br>
+                Thank you for being a valued customer!
+            </p>
+
+            <div class="social-links">
+                <a href="{{facebook_url}}">Facebook</a>
+                <a href="{{twitter_url}}">Twitter</a>
+                <a href="{{instagram_url}}">Instagram</a>
+            </div>
+
+            <p class="footer-text">
+                Questions? <a href="mailto:{{support_email}}" class="footer-link">Contact us</a>
+            </p>
+
+            <p class="footer-text" style="font-size: 12px; color: #adb5bd;">
+                {{store_address}}<br>
+                <a href="{{manage_preferences_link}}" class="footer-link">Manage email preferences</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
