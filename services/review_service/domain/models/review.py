@@ -56,6 +56,7 @@ class Review:
 
     # Optional fields
     id: Optional[str] = None
+    merchant_id: Optional[str] = None
     verified_purchase: bool = False
     helpful_count: int = 0
     media_urls: List[str] = field(default_factory=list)
