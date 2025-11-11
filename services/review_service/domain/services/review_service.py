@@ -11,6 +11,7 @@ from review_service.domain.interfaces.review_repository_interface import (
 )
 from review_service.domain.interfaces.cache_interface import ICacheService
 from review_service.domain.interfaces.event_bus_interface import IEventBus
+from shared.config.settings import get_settings
 
 
 class ReviewService:
@@ -45,9 +46,10 @@ class ReviewService:
         self.cache_service = cache_service
         self.event_bus = event_bus
 
-        # Cache TTL in seconds
-        self.CACHE_TTL_REVIEWS = 300  # 5 minutes
-        self.CACHE_TTL_RATINGS = 600  # 10 minutes
+        # Load cache TTL from settings
+        settings = get_settings()
+        self.CACHE_TTL_REVIEWS = settings.cache_ttl_reviews
+        self.CACHE_TTL_RATINGS = settings.cache_ttl_ratings
 
     async def create_review(self, review: Review) -> Review:
         """
@@ -63,7 +65,13 @@ class ReviewService:
 
         Returns:
             Created review
+
+        Raises:
+            ValueError: If review validation fails
         """
+        # Validate review data
+        review.validate()
+
         # Business Rule: Auto-approve verified purchases with high ratings
         if review.verified_purchase and review.is_high_rating():
             review.approve()
@@ -311,15 +319,33 @@ class ReviewService:
 
         return updated_review
 
+    async def count_product_reviews(
+        self, product_id: str, status: Optional[ReviewStatus] = None
+    ) -> int:
+        """
+        Count reviews for a product
+
+        Args:
+            product_id: Product identifier
+            status: Filter by status (optional)
+
+        Returns:
+            Total count of reviews
+        """
+        return await self.review_repository.count_by_product(product_id, status)
+
     async def _invalidate_product_cache(self, product_id: str) -> None:
         """
         Invalidate all cache entries for a product
 
+        Uses pattern matching to clear all related cache keys including:
+        - product:reviews:{product_id}*
+        - product:rating:{product_id}
+        - product:stats:{product_id}
+
         Args:
             product_id: Product identifier
         """
-        await self.cache_service.delete(f"product:reviews:{product_id}")
-        await self.cache_service.delete(f"product:rating:{product_id}")
-        await self.cache_service.delete(f"product:stats:{product_id}")
-        # Also clear any paginated review caches
-        await self.cache_service.clear(f"product:reviews:{product_id}:*")
+        # Use pattern matching to clear all product-related caches
+        # This catches paginated results and all variations
+        await self.cache_service.clear(f"product:*:{product_id}*")

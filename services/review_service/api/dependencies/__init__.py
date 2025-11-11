@@ -125,6 +125,40 @@ async def verify_api_key(
     return x_api_key
 
 
+async def verify_admin_api_key(
+    x_api_key: str = Depends(verify_api_key)
+) -> str:
+    """
+    Verify API key has admin privileges
+
+    In production, this would:
+    1. Look up the API key in database
+    2. Check if key has admin role/permissions
+    3. Verify key hasn't expired
+    4. Log admin access for audit
+
+    For development: Keys starting with 'admin-' are considered admin keys
+
+    Args:
+        x_api_key: Verified API key from verify_api_key dependency
+
+    Returns:
+        str: Verified admin API key
+
+    Raises:
+        HTTPException: If API key doesn't have admin privileges
+    """
+    # TODO: Implement proper role-based access control
+    # For development, check if key starts with 'admin-'
+    if not x_api_key.startswith("admin-"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required. This operation requires elevated privileges.",
+        )
+
+    return x_api_key
+
+
 def get_settings_dependency() -> Settings:
     """Get application settings"""
     return settings

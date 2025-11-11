@@ -14,7 +14,11 @@ from review_service.api.models import (
     RatingStatsResponse,
     SuccessResponse,
 )
-from review_service.api.dependencies import get_review_service, verify_api_key
+from review_service.api.dependencies import (
+    get_review_service,
+    verify_api_key,
+    verify_admin_api_key,
+)
 from review_service.domain.services.review_service import ReviewService
 from review_service.domain.models.review import Review, ReviewRating, ReviewStatus
 from shared.config.settings import get_settings
@@ -36,27 +40,33 @@ async def create_review(
     api_key: str = Depends(verify_api_key),
 ) -> ReviewResponse:
     """Create a new review"""
-    # Convert request to domain model
-    review = Review(
-        id=None,
-        product_id=request.product_id,
-        customer_id=request.customer_id,
-        rating=ReviewRating(request.rating),
-        title=request.title,
-        content=request.content,
-        status=ReviewStatus.PENDING,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
-        verified_purchase=request.verified_purchase,
-        media_urls=request.media_urls,
-        attributes=request.attributes,
-    )
+    try:
+        # Convert request to domain model
+        review = Review(
+            id=None,
+            product_id=request.product_id,
+            customer_id=request.customer_id,
+            rating=ReviewRating(request.rating),
+            title=request.title,
+            content=request.content,
+            status=ReviewStatus.PENDING,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            verified_purchase=request.verified_purchase,
+            media_urls=request.media_urls,
+            attributes=request.attributes,
+        )
 
-    # Create review
-    created_review = await service.create_review(review)
+        # Create review (validation happens in service)
+        created_review = await service.create_review(review)
 
-    # Convert to response
-    return _review_to_response(created_review)
+        # Convert to response
+        return _review_to_response(created_review)
+    except ValueError as e:
+        # Validation errors from domain model
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        )
 
 
 @router.get(
@@ -74,19 +84,23 @@ async def get_product_reviews(
     api_key: str = Depends(verify_api_key),
 ) -> ReviewListResponse:
     """Get reviews for a product"""
-    # Parse status
-    review_status = ReviewStatus(status) if status else None
+    # Parse and validate status
+    try:
+        review_status = ReviewStatus(status) if status else None
+    except ValueError:
+        valid_statuses = [s.value for s in ReviewStatus]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid status '{status}'. Must be one of: {', '.join(valid_statuses)}",
+        )
 
     # Get reviews
     reviews = await service.get_product_reviews(
         product_id=product_id, status=review_status, limit=limit, offset=offset
     )
 
-    # Get total count
-    from review_service.api.dependencies import get_review_repository
-
-    repo = await get_review_repository.__wrapped__(next(get_review_repository.__defaults__))
-    total = await repo.count_by_product(product_id, review_status)
+    # Get total count from service
+    total = await service.count_product_reviews(product_id, review_status)
 
     # Convert to response
     return ReviewListResponse(
@@ -170,7 +184,7 @@ async def mark_review_helpful(
 async def approve_review(
     review_id: str,
     service: ReviewService = Depends(get_review_service),
-    api_key: str = Depends(verify_api_key),
+    api_key: str = Depends(verify_admin_api_key),
 ) -> ReviewResponse:
     """Approve a review"""
     try:
@@ -189,7 +203,7 @@ async def approve_review(
 async def reject_review(
     review_id: str,
     service: ReviewService = Depends(get_review_service),
-    api_key: str = Depends(verify_api_key),
+    api_key: str = Depends(verify_admin_api_key),
 ) -> ReviewResponse:
     """Reject a review"""
     try:

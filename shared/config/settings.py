@@ -42,9 +42,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expiration: int = 3600  # 1 hour
 
-    # Performance
-    cache_ttl_reviews: int = 300  # 5 minutes
-    cache_ttl_ratings: int = 600  # 10 minutes
+    # Performance & Caching
+    cache_ttl_reviews: int = 300  # 5 minutes - cached review lists
+    cache_ttl_ratings: int = 600  # 10 minutes - cached ratings and stats
 
     # Rate limiting
     rate_limit_requests: int = 1000

@@ -61,44 +61,84 @@ class Review:
     media_urls: List[str] = field(default_factory=list)
     attributes: Dict[str, Any] = field(default_factory=dict)
 
-    def approve(self) -> None:
+    def approve(self, current_time: Optional[datetime] = None) -> None:
         """
         Approve a pending review
 
         Business Rule: Only PENDING reviews can be approved.
         Already approved reviews remain unchanged.
+
+        Args:
+            current_time: Optional timestamp (for testing). Defaults to utcnow()
         """
         if self.status == ReviewStatus.PENDING:
             self.status = ReviewStatus.APPROVED
-            self.updated_at = datetime.utcnow()
+            self.updated_at = current_time or datetime.utcnow()
 
-    def reject(self) -> None:
+    def reject(self, current_time: Optional[datetime] = None) -> None:
         """
         Reject a review
 
         Sets the review status to REJECTED
+
+        Args:
+            current_time: Optional timestamp (for testing). Defaults to utcnow()
         """
         self.status = ReviewStatus.REJECTED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = current_time or datetime.utcnow()
 
-    def flag(self) -> None:
+    def flag(self, current_time: Optional[datetime] = None) -> None:
         """
         Flag a review for moderation
 
         Used when users report inappropriate content or when
         automated systems detect potential issues
+
+        Args:
+            current_time: Optional timestamp (for testing). Defaults to utcnow()
         """
         self.status = ReviewStatus.FLAGGED
-        self.updated_at = datetime.utcnow()
+        self.updated_at = current_time or datetime.utcnow()
 
-    def increment_helpful(self) -> None:
+    def increment_helpful(self, current_time: Optional[datetime] = None) -> None:
         """
         Increment the helpful count
 
         Called when users mark a review as helpful
+
+        Args:
+            current_time: Optional timestamp (for testing). Defaults to utcnow()
         """
         self.helpful_count += 1
-        self.updated_at = datetime.utcnow()
+        self.updated_at = current_time or datetime.utcnow()
+
+    def validate(self) -> None:
+        """
+        Validate review data
+
+        Raises:
+            ValueError: If validation fails
+        """
+        if not self.product_id or not self.product_id.strip():
+            raise ValueError("product_id is required")
+
+        if not self.customer_id or not self.customer_id.strip():
+            raise ValueError("customer_id is required")
+
+        if not self.title or not self.title.strip():
+            raise ValueError("title is required")
+
+        if len(self.title) > 500:
+            raise ValueError("title must be 500 characters or less")
+
+        if not self.content or not self.content.strip():
+            raise ValueError("content is required")
+
+        if len(self.content) > 5000:
+            raise ValueError("content must be 5000 characters or less")
+
+        if len(self.media_urls) > 10:
+            raise ValueError("maximum 10 media files allowed")
 
     def is_approved(self) -> bool:
         """Check if review is approved"""
