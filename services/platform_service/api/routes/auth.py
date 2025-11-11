@@ -2,11 +2,14 @@
 Authentication Routes
 Handles OAuth flows for platform installations
 """
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, Depends, status
 from fastapi.responses import RedirectResponse
 from typing import Optional
 
 from platform_service.domain.entities.platform_merchant import PlatformType
+from platform_service.domain.services.platform_service import PlatformService
+from platform_service.infrastructure.shopify.shopify_auth import ShopifyAuthProvider
+from platform_service.api.dependencies import get_platform_service, get_shopify_auth_provider
 
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -17,6 +20,7 @@ async def install_redirect(
     platform: str,
     shop: str = Query(..., description="Shop domain (e.g., mystore.myshopify.com)"),
     redirect_uri: Optional[str] = Query(None, description="Custom redirect URI"),
+    auth_provider: ShopifyAuthProvider = Depends(get_shopify_auth_provider),
 ):
     """
     Step 1: Redirect merchant to platform OAuth consent screen
@@ -91,6 +95,8 @@ async def oauth_callback(
     shop: str = Query(..., description="Shop domain"),
     state: Optional[str] = Query(None, description="CSRF protection token"),
     hmac: Optional[str] = Query(None, description="HMAC signature (Shopify)"),
+    platform_service: PlatformService = Depends(get_platform_service),
+    auth_provider: ShopifyAuthProvider = Depends(get_shopify_auth_provider),
 ):
     """
     Step 2: OAuth callback endpoint
@@ -131,23 +137,28 @@ async def oauth_callback(
 
         # Step 1: Verify HMAC (for Shopify)
         if platform == "shopify":
-            # Would use ShopifyAuthProvider.verify_request() here
-            # if not auth_provider.verify_request(request.query_params, hmac):
-            #     raise HTTPException(status_code=401, detail="Invalid HMAC signature")
-            pass
+            # Build query params dict for verification
+            query_params = {"code": code, "shop": shop, "state": state or "", "hmac": hmac or ""}
+            if not auth_provider.verify_request(query_params, hmac or ""):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid HMAC signature",
+                )
 
         # Step 2: Verify state token (CSRF protection)
+        # TODO: Implement state verification with cache/session
         # stored_state = cache.get(f"oauth_state:{state}")
         # if not stored_state or stored_state["shop"] != shop:
         #     raise HTTPException(status_code=401, detail="Invalid state token")
 
         # Step 3-7: Use PlatformService to complete installation
-        # platform_type = PlatformType(platform)
-        # merchant = await platform_service.install_merchant(code, shop, platform_type)
+        platform_type = PlatformType(platform)
+        merchant = await platform_service.install_merchant(code, shop, platform_type)
 
         # Success! Redirect to merchant dashboard
+        # TODO: Update with actual frontend URL from settings
         return RedirectResponse(
-            url=f"https://yourdomain.com/dashboard?merchant_id=merchant123&status=installed",
+            url=f"https://yourdomain.com/dashboard?merchant_id={merchant.id}&status=installed",
             status_code=status.HTTP_302_FOUND,
         )
 
@@ -164,7 +175,11 @@ async def oauth_callback(
 
 
 @router.post("/{platform}/uninstall")
-async def uninstall(platform: str, merchant_id: str):
+async def uninstall(
+    platform: str,
+    merchant_id: str,
+    platform_service: PlatformService = Depends(get_platform_service),
+):
     """
     Uninstall app for merchant
 
@@ -177,7 +192,7 @@ async def uninstall(platform: str, merchant_id: str):
     """
     try:
         # Use PlatformService to handle uninstallation
-        # await platform_service.uninstall_merchant(merchant_id)
+        await platform_service.uninstall_merchant(merchant_id)
 
         return {
             "status": "uninstalled",

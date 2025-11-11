@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from shared.config.settings import get_settings
-from review_service.api.routes import reviews
+from review_service.api.routes import reviews, public
 from review_service.infrastructure.database.models import Base
 from review_service.api.dependencies import engine
 
@@ -34,6 +34,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(reviews.router)
+app.include_router(public.router)
 
 
 @app.on_event("startup")

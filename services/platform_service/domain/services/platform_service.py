@@ -211,6 +211,26 @@ class PlatformService:
 
         return token_ids
 
+    async def get_merchant_by_platform_domain(
+        self, platform: PlatformType, domain: str
+    ) -> Optional[PlatformMerchant]:
+        """
+        Get platform merchant by platform and domain
+
+        Args:
+            platform: Platform type (e.g., SHOPIFY, WOOCOMMERCE)
+            domain: Shop/store domain (e.g., "mystore.myshopify.com")
+
+        Returns:
+            PlatformMerchant if found, None otherwise
+        """
+        if not self.platform_merchant_repository:
+            return None
+
+        return await self.platform_merchant_repository.get_by_platform_domain(
+            platform, domain
+        )
+
     async def uninstall_merchant(self, merchant_id: str) -> None:
         """
         Handle merchant uninstallation

@@ -2,8 +2,14 @@
 Webhook Routes
 Handles platform webhook events
 """
-from fastapi import APIRouter, HTTPException, Request, Header, status
+from fastapi import APIRouter, HTTPException, Request, Header, Depends, status
 from typing import Optional
+import json
+
+from platform_service.domain.entities.platform_merchant import PlatformType
+from platform_service.domain.services.platform_service import PlatformService
+from platform_service.infrastructure.shopify.shopify_webhooks import ShopifyWebhookHandler
+from platform_service.api.dependencies import get_platform_service, get_shopify_webhook_handler
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -11,6 +17,8 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 @router.post("/shopify/orders_fulfilled")
 async def shopify_order_fulfilled(
     request: Request,
+    platform_service: PlatformService = Depends(get_platform_service),
+    webhook_handler: ShopifyWebhookHandler = Depends(get_shopify_webhook_handler),
     x_shopify_topic: Optional[str] = Header(None),
     x_shopify_shop_domain: Optional[str] = Header(None),
     x_shopify_hmac_sha256: Optional[str] = Header(None),
@@ -61,37 +69,44 @@ async def shopify_order_fulfilled(
         payload = await request.body()
 
         # Verify HMAC signature
-        # webhook_handler = ShopifyWebhookHandler()
-        # if not webhook_handler.verify_webhook(payload, request.headers):
-        #     raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        if not webhook_handler.verify_webhook(payload, dict(request.headers)):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
 
         # Step 2: Parse JSON payload
-        import json
         webhook_data = json.loads(payload)
 
         # Step 3: Parse webhook event
-        # event = await webhook_handler.parse_webhook_event(webhook_data, request.headers)
+        event = webhook_handler.parse_webhook_event(webhook_data, dict(request.headers))
 
         # Step 4: Get merchant by shop_domain
-        # merchant = await merchant_repository.get_by_platform_domain(
-        #     PlatformType.SHOPIFY, x_shopify_shop_domain
-        # )
+        if not x_shopify_shop_domain:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing X-Shopify-Shop-Domain header",
+            )
 
-        # if not merchant:
-        #     # Shop not found - might have uninstalled
-        #     return {"status": "ignored", "reason": "merchant_not_found"}
+        merchant = await platform_service.get_merchant_by_platform_domain(
+            PlatformType.SHOPIFY, x_shopify_shop_domain
+        )
+
+        if not merchant:
+            # Shop not found - might have uninstalled
+            return {"status": "ignored", "reason": "merchant_not_found"}
 
         # Step 5: Handle order fulfilled
-        # token_ids = await platform_service.handle_order_fulfilled(
-        #     merchant.id, str(webhook_data["id"])
-        # )
+        token_ids = await platform_service.handle_order_fulfilled(
+            merchant.id, str(webhook_data["id"])
+        )
 
         # Return success immediately (don't make Shopify wait)
         return {
             "status": "received",
             "order_id": webhook_data.get("id"),
             "shop_domain": x_shopify_shop_domain,
-            # "tokens_created": len(token_ids),
+            "tokens_created": len(token_ids),
         }
 
     except json.JSONDecodeError:
@@ -111,6 +126,8 @@ async def shopify_order_fulfilled(
 @router.post("/shopify/app_uninstalled")
 async def shopify_app_uninstalled(
     request: Request,
+    platform_service: PlatformService = Depends(get_platform_service),
+    webhook_handler: ShopifyWebhookHandler = Depends(get_shopify_webhook_handler),
     x_shopify_topic: Optional[str] = Header(None),
     x_shopify_shop_domain: Optional[str] = Header(None),
     x_shopify_hmac_sha256: Optional[str] = Header(None),
@@ -150,21 +167,28 @@ async def shopify_app_uninstalled(
         payload = await request.body()
 
         # Verify HMAC
-        # webhook_handler = ShopifyWebhookHandler()
-        # if not webhook_handler.verify_webhook(payload, request.headers):
-        #     raise HTTPException(status_code=401, detail="Invalid webhook signature")
+        if not webhook_handler.verify_webhook(payload, dict(request.headers)):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid webhook signature",
+            )
 
         # Parse payload
-        import json
         webhook_data = json.loads(payload)
 
         # Get merchant
-        # merchant = await merchant_repository.get_by_platform_domain(
-        #     PlatformType.SHOPIFY, x_shopify_shop_domain
-        # )
+        if not x_shopify_shop_domain:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Missing X-Shopify-Shop-Domain header",
+            )
 
-        # if merchant:
-        #     await platform_service.uninstall_merchant(merchant.id)
+        merchant = await platform_service.get_merchant_by_platform_domain(
+            PlatformType.SHOPIFY, x_shopify_shop_domain
+        )
+
+        if merchant:
+            await platform_service.uninstall_merchant(merchant.id)
 
         return {
             "status": "received",

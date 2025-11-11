@@ -2,10 +2,15 @@
 Public Review Routes
 Endpoints for customer review submission (no authentication required)
 """
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 from datetime import datetime
+
+from platform_service.domain.services.platform_service import PlatformService
+from review_service.domain.services.review_service import ReviewService
+from review_service.domain.models.review import Review, ReviewRating, ReviewStatus
+from review_service.api.dependencies import get_platform_service, get_review_service
 
 router = APIRouter(prefix="/public", tags=["public"])
 
@@ -39,7 +44,10 @@ class TokenValidationResponse(BaseModel):
 
 
 @router.get("/review/validate/{token}")
-async def validate_token(token: str):
+async def validate_token(
+    token: str,
+    platform_service: PlatformService = Depends(get_platform_service),
+):
     """
     Validate review token
 
@@ -57,48 +65,47 @@ async def validate_token(token: str):
         → Returns: {"valid": true, "product_info": {...}}
     """
     try:
-        # This would use PlatformService.validate_review_token()
-        # token_entity = await platform_service.validate_review_token(token)
+        # Validate token using PlatformService
+        token_entity = await platform_service.validate_review_token(token)
 
-        # if not token_entity:
-        #     return TokenValidationResponse(
-        #         valid=False,
-        #         expired=False,
-        #         used=False,
-        #         error="Token not found"
-        #     )
+        if not token_entity:
+            return TokenValidationResponse(
+                valid=False,
+                expired=False,
+                used=False,
+                error="Token not found"
+            )
 
-        # if token_entity.is_expired():
-        #     return TokenValidationResponse(
-        #         valid=False,
-        #         expired=True,
-        #         used=token_entity.used,
-        #         error="Token has expired"
-        #     )
+        if token_entity.is_expired():
+            return TokenValidationResponse(
+                valid=False,
+                expired=True,
+                used=token_entity.used,
+                error="Token has expired"
+            )
 
-        # if token_entity.used:
-        #     return TokenValidationResponse(
-        #         valid=False,
-        #         expired=False,
-        #         used=True,
-        #         error="Token has already been used"
-        #     )
+        if token_entity.used:
+            return TokenValidationResponse(
+                valid=False,
+                expired=False,
+                used=True,
+                error="Token has already been used"
+            )
 
         # Get product info
-        # product = await platform_service.get_product_details(
-        #     token_entity.merchant_id,
-        #     token_entity.product_id
-        # )
+        product = await platform_service.get_product_details(
+            token_entity.merchant_id,
+            token_entity.product_id
+        )
 
-        # Placeholder response
         return TokenValidationResponse(
             valid=True,
             expired=False,
             used=False,
             product_info={
-                "product_id": "prod_123",
-                "title": "Sample Product",
-                "image_url": "https://example.com/product.jpg",
+                "product_id": product.platform_product_id,
+                "title": product.title,
+                "image_url": product.image_url,
             },
         )
 
@@ -110,7 +117,11 @@ async def validate_token(token: str):
 
 
 @router.post("/review/submit", status_code=status.HTTP_201_CREATED)
-async def submit_review(request: ReviewSubmissionRequest):
+async def submit_review(
+    request: ReviewSubmissionRequest,
+    platform_service: PlatformService = Depends(get_platform_service),
+    review_service: ReviewService = Depends(get_review_service),
+):
     """
     Submit review with token
 
@@ -149,71 +160,64 @@ async def submit_review(request: ReviewSubmissionRequest):
     """
     try:
         # Step 1: Validate token
-        # token_entity = await platform_service.validate_review_token(request.token)
+        token_entity = await platform_service.validate_review_token(request.token)
 
-        # if not token_entity:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_404_NOT_FOUND,
-        #         detail="Invalid token"
-        #     )
+        if not token_entity:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invalid token"
+            )
 
-        # if not token_entity.is_valid():
-        #     if token_entity.is_expired():
-        #         raise HTTPException(
-        #             status_code=status.HTTP_410_GONE,
-        #             detail="Token has expired"
-        #         )
-        #     elif token_entity.used:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_409_CONFLICT,
-        #             detail="Token has already been used"
-        #         )
+        if not token_entity.is_valid():
+            if token_entity.is_expired():
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail="Token has expired"
+                )
+            elif token_entity.used:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Token has already been used"
+                )
 
         # Step 2: Create review
-        # from review_service.domain.models.review import Review, ReviewRating, ReviewStatus
-
-        # review = Review(
-        #     merchant_id=token_entity.merchant_id,
-        #     product_id=token_entity.product_id,
-        #     customer_id=token_entity.customer_email,  # Use email as customer ID
-        #     rating=ReviewRating(request.rating),
-        #     title=request.title,
-        #     content=request.content,
-        #     status=ReviewStatus.PENDING,  # Pending until moderated
-        #     verified_purchase=True,  # Came from order token
-        #     media_urls=request.media_urls,
-        #     created_at=datetime.utcnow(),
-        #     updated_at=datetime.utcnow(),
-        #     attributes={
-        #         "order_id": token_entity.order_id,
-        #         "token_id": token_entity.id,
-        #     }
-        # )
+        review = Review(
+            id=None,
+            merchant_id=token_entity.merchant_id,
+            product_id=token_entity.product_id,
+            customer_id=token_entity.customer_email,  # Use email as customer ID
+            rating=ReviewRating(request.rating),
+            title=request.title,
+            content=request.content,
+            status=ReviewStatus.PENDING,  # Pending until moderated
+            verified_purchase=True,  # Came from order token
+            media_urls=request.media_urls,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+            attributes={
+                "order_id": token_entity.order_id,
+                "token_id": token_entity.id,
+            }
+        )
 
         # Step 3: Save review
-        # created_review = await review_service.create_review(review)
+        created_review = await review_service.create_review(review)
 
         # Step 4: Mark token as used (atomic!)
-        # success = await platform_service.mark_token_used(request.token)
-        # if not success:
-        #     # Race condition - token was used by another request
-        #     raise HTTPException(
-        #         status_code=status.HTTP_409_CONFLICT,
-        #         detail="Token has already been used"
-        #     )
+        success = await platform_service.mark_token_used(request.token)
+        if not success:
+            # Race condition - token was used by another request
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Token has already been used"
+            )
 
-        # Step 5: Publish event for confirmation email
-        # await event_bus.publish("review.submitted", {
-        #     "review_id": created_review.id,
-        #     "customer_email": token_entity.customer_email,
-        #     "product_id": token_entity.product_id,
-        #     "merchant_id": token_entity.merchant_id,
-        # })
+        # Step 5: Event published by review_service.create_review()
+        # No need to publish event here - the service handles it
 
-        # Placeholder response
         return {
-            "id": "rev_123",
-            "status": "pending",
+            "id": created_review.id,
+            "status": created_review.status.value,
             "message": "Review submitted successfully. It will be visible after moderation.",
             "verified_purchase": True,
         }
@@ -228,7 +232,10 @@ async def submit_review(request: ReviewSubmissionRequest):
 
 
 @router.get("/review/{token}")
-async def get_review_form_data(token: str):
+async def get_review_form_data(
+    token: str,
+    platform_service: PlatformService = Depends(get_platform_service),
+):
     """
     Get data for review form
 
@@ -251,34 +258,30 @@ async def get_review_form_data(token: str):
         }
     """
     try:
-        # Validate token and get form data
-        # validation = await validate_token(token)
+        # Validate token
+        token_entity = await platform_service.validate_review_token(token)
 
-        # if not validation.valid:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail=validation.error or "Invalid token"
-        #     )
+        if not token_entity or not token_entity.is_valid():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid, expired, or used token"
+            )
 
-        # token_entity = await platform_service.validate_review_token(token)
+        # Get product info
+        product = await platform_service.get_product_details(
+            token_entity.merchant_id,
+            token_entity.product_id
+        )
 
-        # return {
-        #     "valid": True,
-        #     "product": validation.product_info,
-        #     "customer_name": token_entity.customer_name,
-        #     "customer_email": token_entity.customer_email,
-        #     "expires_at": token_entity.expires_at.isoformat(),
-        # }
-
-        # Placeholder
         return {
             "valid": True,
             "product": {
-                "title": "Sample Product",
-                "image_url": "https://example.com/product.jpg",
+                "title": product.title,
+                "image_url": product.image_url,
             },
-            "customer_name": "John Doe",
-            "customer_email": "john@example.com",
+            "customer_name": token_entity.customer_name,
+            "customer_email": token_entity.customer_email,
+            "expires_at": token_entity.expires_at.isoformat(),
         }
 
     except HTTPException:

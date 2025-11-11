@@ -29,10 +29,11 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
-# Include routers (will be created next)
-# from platform_service.api.routes import auth, webhooks
-# app.include_router(auth.router)
-# app.include_router(webhooks.router)
+# Include routers
+from platform_service.api.routes import auth, webhooks
+
+app.include_router(auth.router)
+app.include_router(webhooks.router)
 
 
 @app.get("/", tags=["health"])
