@@ -70,6 +70,12 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-20241022"
     anthropic_max_tokens: int = 4096
 
+    # Platform Integrations - Shopify
+    shopify_api_key: Optional[str] = None
+    shopify_api_secret: Optional[str] = None
+    shopify_app_url: str = "https://api.yourdomain.com"
+    shopify_scopes: list = ["read_orders", "read_products", "write_products"]
+
     # Celery (Task Queue) - Shares Redis with application (different databases)
     celery_broker_url: str = "redis://:changeme@localhost:6379/2"  # Celery broker
     celery_result_backend: str = "redis://:changeme@localhost:6379/3"  # Results backend
